@@ -10,6 +10,9 @@ from litex.build.generic_platform import Pins, Subsignal, IOStandard
 from litex.soc.integration.soc_core import *
 from litex.soc.integration.builder import *
 
+from litex.soc.cores.spi import *
+from litex.soc.cores.nor_flash_16 import *
+
 from gateware import cas
 from gateware import spi_flash
 
@@ -22,10 +25,6 @@ class _CRG(Module):
 
         self.clock_domains.cd_sys = ClockDomain()
         self.reset = Signal()
-
-        # FIXME: Use PLL, increase system clock to 32 MHz, pending nextpnr
-        # fixes.
-        self.comb += self.cd_sys.clk.eq(clk12)
 
         # POR reset logic- POR generated from sys clk, POR logic feeds sys clk
         # reset.
@@ -41,16 +40,39 @@ class _CRG(Module):
             )
         self.specials += AsyncResetSynchronizer(self.cd_por, self.reset)
 
+        sys_clk = Signal()
+        self.specials += [
+            Instance("SB_PLL40_CORE",
+                     p_FEEDBACK_PATH="SIMPLE",
+                     p_DIVR=0,
+                     p_DIVF=52,
+                     p_DIVQ=4,
+                     p_FILTER_RANGE=1,
+
+                     i_BYPASS=0, i_RESETB=1,
+                     i_REFERENCECLK=clk12,
+
+                     o_PLLOUTGLOBAL=sys_clk,
+                     ),
+        ]
+        # FIXME: Use PLL, increase system clock to 32 MHz, pending nextpnr
+        # fixes.
+        self.comb += self.cd_sys.clk.eq(sys_clk)
+
+
+
 
 class BaseSoC(SoCCore):
     csr_peripherals = (
         "spiflash",
         "cas",
+        "spi",
     )
     csr_map_update(SoCCore.csr_map, csr_peripherals)
 
     mem_map = {
         "spiflash": 0x20000000,  # (default shadow @0xa0000000)
+        "flash": 0x40000000,
     }
     mem_map.update(SoCCore.mem_map)
 
@@ -62,13 +84,14 @@ class BaseSoC(SoCCore):
 
         # FIXME: Force either lite or minimal variants of CPUs; full is too big.
 
-        clk_freq = int(12e6)
+        clk_freq = int(40e6)
 
         kwargs['cpu_reset_address']=self.mem_map["spiflash"]+platform.gateware_size
         SoCCore.__init__(self, platform, clk_freq, **kwargs)
 
-        self.submodules.crg = _CRG(platform)
-        self.platform.add_period_constraint(self.crg.cd_sys.clk, 1e9/clk_freq)
+        self.submodules.zrg = _CRG(platform)
+        self.platform.add_period_constraint(self.zrg.cd_sys.clk, 1e9/clk_freq)
+        self.platform.add_period_constraint(self.zrg.cd_por.clk, 1e9/clk_freq)
 
         # Control and Status
         self.submodules.cas = cas.ControlAndStatus(platform, clk_freq)
@@ -95,6 +118,12 @@ class BaseSoC(SoCCore):
             # Leave a grace area- possible one-by-off bug in add_memory_region?
             # Possible fix: addr < origin + length - 1
             platform.spiflash_total_size - (self.flash_boot_address - self.mem_map["spiflash"]) - 0x100)
+
+        self.submodules.spi = SPIMaster(platform.request("spi"))
+
+        self.submodules.flash = NorFlash16(platform.request("flash"), 1, 1)
+        self.register_mem("flash", self.mem_map["flash"],
+                          self.flash.bus, size=0x800000)
 
         # Disable final deep-sleep power down so firmware words are loaded
         # onto softcore's address bus.

@@ -31,6 +31,24 @@ _io = [
         Subsignal("miso", Pins("P11"), IOStandard("LVCMOS33")),
     ),
 
+    ("spi", 0,
+         Subsignal("cs_n", Pins("H1"), IOStandard("LVCMOS33")),
+         Subsignal("clk", Pins("J2"), IOStandard("LVCMOS33")),
+         Subsignal("mosi", Pins("J1"), IOStandard("LVCMOS33")),
+         Subsignal("miso", Pins("K1"), IOStandard("LVCMOS33")),
+    ),
+
+    ("flash", 0,
+         Subsignal("oe_n", Pins("K3"), IOStandard("LVCMOS33")),
+         Subsignal("ce_n", Pins("L4"), IOStandard("LVCMOS33")),
+         Subsignal("we_n", Pins("L1"), IOStandard("LVCMOS33")),
+         Subsignal("d", Pins("K4 M1 L6 L3 K5 M2 L7 N2 "
+                             "M6 M3 L5 N3 P1 M4 P2 M5 "), IOStandard("LVCMOS33")),
+         Subsignal("adr", Pins("R1 N4 N6 T1 P4 R2 N5 T2 "
+                               "P5 R3 R5 T3 R4 M7 N7 P6 "
+                               "M8 T5 R6 P8 T6 L9"), IOStandard("LVCMOS33")),
+     ),
+
     ("clk12", 0, Pins("J3"), IOStandard("LVCMOS33"))
 ]
 
